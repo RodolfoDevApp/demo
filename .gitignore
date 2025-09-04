@@ -1,0 +1,65 @@
+# Archivos y carpetas generados automáticamente por Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+
+# Cache de compilación
+[Bb]in/
+[Bb]uildOutput/
+[Bb]uildCache/
+[Bb]urstCache/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de usuario (no deben compartirse)
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Configuración de Rider/Visual Studio
+.idea/
+.vscode/
+*.code-workspace
+
+# Carpetas de Unity que se regeneran
+[Bb]uilds/
+Assets/AssetStoreTools*
+
+# Textures / Lightmaps generados
+[Ll]ightmapSnapshot/
+[Ll]ightmaps/
+[Ll]ightmapSettings/
+[Ll]ightProbeSnapshot/
+
+# Archivos de cache de Unity
+sysinfo.txt
+
+# Otros
+*.apk
+*.aab
+*.unitypackage
+
+# Crash reports
+CrashReports/
+
+# Paquetes descargados
+*.tgz
+
+.vs/

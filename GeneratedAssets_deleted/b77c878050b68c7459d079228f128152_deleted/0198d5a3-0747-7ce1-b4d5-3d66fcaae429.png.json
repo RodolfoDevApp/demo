@@ -1,0 +1,20 @@
+{
+    "asset": "b77c878050b68c7459d079228f128152",
+    "fileName": "0198d5a3-0747-7ce1-b4d5-3d66fcaae429.png",
+    "prompt": "pixel art top-down, 4-direction view (up/down/left/right), size 32x32 (o el que uses), 1px dark outline, limited palette (post-apocalyptic), centered character, no background, consistent silhouette for all directions",
+    "negativePrompt": "",
+    "model": "30e7ef61-9c8a-4c75-b575-4e0f2608cc2c",
+    "modelName": "Action Game",
+    "customSeed": -1,
+    "w3CTraceId": "d676971f4494551d5a1bc46fac759619",
+    "refinementMode": "Generation",
+    "pixelateTargetSize": 0,
+    "pixelateKeepImageSize": false,
+    "pixelatePixelBlockSize": 0,
+    "pixelateMode": 0,
+    "pixelateOutlineThickness": 0,
+    "doodles": {
+        "m_Items": []
+    },
+    "upscaleFactor": 0
+}

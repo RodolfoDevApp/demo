@@ -1,0 +1,7 @@
+{
+  "gameover.title": "You Died",
+  "gameover.subtitle": "Try again?",
+  "gameover.revive": "Revive",
+  "gameover.retry": "Retry",
+  "gameover.quit": "Quit"
+}

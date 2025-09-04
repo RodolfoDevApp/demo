@@ -1,0 +1,20 @@
+{
+    "asset": "8b2bce0db18d2594eb4414ca7c91ec2c",
+    "fileName": "0198d5a9-891f-76de-a65c-560751606b79.jpg",
+    "prompt": "Style: pixel art, isometric 3/4 view (~30°), SIX directions {UL, UR, L, R, DL, DR}. \r\nFrame size: 64x64 (transparent background), bottom-center pivot aligned to the feet. \r\nConsistent proportions and palette across all animations. 1-px dark outline. \r\nPost-apocalyptic color vibe. Keep the character design consistent across prompts.\r\nOutput: clean sprite sheet grid (no shadows, no background halos).\r\n[BASE STYLE ABOVE]\r\n\r\nGenerate the PLAYER BODY (no hands/arms) idle animation in SIX directions {UL, UR, L, R, DL, DR}.\r\n4 frames per direction, subtle breathing loop. Keep pose and proportions consistent.\r\nOutput as a single sprite sheet grid (grouped per direction).\r\n",
+    "negativePrompt": "",
+    "model": "7f7b9460-c961-4bf8-a854-e164210cd1ff",
+    "modelName": "Game Characters",
+    "customSeed": -1,
+    "w3CTraceId": "01157b26c4277140857fe0c461c7b144",
+    "refinementMode": "Generation",
+    "pixelateTargetSize": 0,
+    "pixelateKeepImageSize": false,
+    "pixelatePixelBlockSize": 0,
+    "pixelateMode": 0,
+    "pixelateOutlineThickness": 0,
+    "doodles": {
+        "m_Items": []
+    },
+    "upscaleFactor": 0
+}
