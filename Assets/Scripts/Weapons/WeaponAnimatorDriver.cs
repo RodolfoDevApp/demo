@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 
+// Dir mapping del proyecto: 0=down, 1=right, 2=left, 3=up
 [RequireComponent(typeof(Animator))]
 public class WeaponAnimatorDriver : MonoBehaviour
 {
@@ -8,7 +9,7 @@ public class WeaponAnimatorDriver : MonoBehaviour
     public Animator bodyAnim;
     public Rigidbody2D playerRb;
 
-    [Tooltip("SpriteRenderer ACTIVO que se usa para ordenar y como 'Source SR' del Muzzle (se actualiza con UseChildSpriteRenderer).")]
+    [Tooltip("SpriteRenderer ACTIVO que se usa para ordenar y como 'Source SR' del Muzzle.")]
     public SpriteRenderer itemSR;
     [Tooltip("SpriteRenderer del hijo (p.ej. 'Sprite') para melee.")]
     public SpriteRenderer itemSRChild;
@@ -18,10 +19,8 @@ public class WeaponAnimatorDriver : MonoBehaviour
     public GameObject handsGO;
 
     [Header("Melee")]
-    [Tooltip("Hitbox de melee actualmente en uso (bat o puños).")]
-    public MeleeHitbox2D melee;     // en escena (bat o fists)
-    [Tooltip("Hitbox específico de puños (duplicado del MeleeHitbox, más pequeño).")]
-    public MeleeHitbox2D fists;
+    public MeleeHitbox2D melee;     // en escena (bat o puños)
+    public MeleeHitbox2D fists;     // hitbox de puños
 
     [Header("Config de manos / render")]
     public bool usesOwnHands = true;
@@ -33,32 +32,12 @@ public class WeaponAnimatorDriver : MonoBehaviour
     public int relativeFrontDelta = +1;
     public int relativeBackDelta = -1;
 
-    [Header("Offsets por dirección (localPosition)")]
-    public Vector2 offsetDown = new(0f, -0.3f);
-    public Vector2 offsetUp = new(0f, 0.18f);
-    public Vector2 offsetLeft = Vector2.zero;
-    public Vector2 offsetRight = Vector2.zero;
-    public bool swapLeftRight = false;
-
-    [Header("Auto-Offsets (opcional)")]
-    public bool useAutoOffsets = false;
-    [Range(0f, 1f)] public float downFracFromMid = 0.6f;
-    [Range(0f, 1f)] public float upFracFromMid = 0.5f;
-
-    [Header("Timing")]
-    public bool offsetInLateUpdate = true;
-
-    [Header("Pixel Perfect")]
-    public bool snapToPixelGrid = true;
-    public bool snapInWorldSpace = true;
-    public int pixelsPerUnitOverride = 0;
-
     [Header("Arma / inventario")]
     public bool isShotgun = true;
     public bool isMelee = false;
     public int clipSize = 4;
     public int loaded = 0;
-    public int reserve = 20; // ← ahora se sincroniza con inventario si está activo (ver abajo)
+    public int reserve = 20;
 
     int shellsToLoad = 0;
     bool isReloading = false;
@@ -84,25 +63,46 @@ public class WeaponAnimatorDriver : MonoBehaviour
     public KeyCode dbgToggleGUIKey = KeyCode.F3;
 
     [Header("Muzzle")]
-    public MuzzleFlash2D muzzle;
+    public MuzzleFlash2D muzzle;              // fogonazo visual
     public bool muzzleViaAnimEvent = false;
 
-    // ---------- NUEVO: integración con inventario de munición ----------
+    // === Lectura directa de anchors del arma actual ===
+    [Header("CurrentWeapon/Anchors (prefab)")]
+    public Transform currentWeaponParent;              // Item/CurrentWeapon
+    public string anchorsContainerName = "Anchors";
+    public string muzzleDownName = "Muzzle_Down";
+    public string muzzleRightName = "Muzzle_Right";
+    public string muzzleLeftName = "Muzzle_Left";
+    public string muzzleUpName = "Muzzle_Up";
+    public string gripDownName = "Grip_Down";
+    public string gripRightName = "Grip_Right";
+    public string gripLeftName = "Grip_Left";
+    public string gripUpName = "Grip_Up";
+
+    [Header("WeaponSockets (en escena)")]
+    public Transform weaponSockets;            // Player/Visual/WeaponSockets
+    public Transform mountDown, mountRight, mountLeft, mountUp;
+
+    // ===== Disparo alternativo (tuyos) =====
+    [Header("Disparo alternativo (opcionales)")]
+    public WeaponProjectileShooter2D projectileShooter; // pistol/gun
+    public ShotgunCone2D shotgunCone;                   // shotgun AOE
+
+    // ---------- Input ----------
+    [Header("Input (keys)")]
+    public KeyCode firePrimary = KeyCode.LeftControl;
+    public KeyCode fireSecondary = KeyCode.RightControl;
+    public KeyCode reloadKey = KeyCode.R;
+
+    // ---------- Inventario ----------
     [Header("Ammo / Inventory Bridge (opcional)")]
-    [Tooltip("Actívalo para que la recarga consuma balas desde InventoryRuntime.")]
     public bool useInventoryAmmo = true;
-    [Tooltip("Inventario global en escena (o del jugador).")]
     public InventoryRuntime inventory;
-    [Tooltip("Hotbar/bridge para leer el id del arma equipada (idPistol/idGun/idShotgun/idBat).")]
     public WeaponHotbarSimple hotbar;
-    [Tooltip("ItemDef de 9mm.")]
     public ItemDef ammo9mm;
-    [Tooltip("ItemDef de rifle.")]
     public ItemDef ammoRifle;
-    [Tooltip("ItemDef de shells de escopeta.")]
     public ItemDef ammoShells;
 
-    // ------------------------------------------------------
     void Reset()
     {
         anim ??= GetComponent<Animator>();
@@ -123,6 +123,10 @@ public class WeaponAnimatorDriver : MonoBehaviour
         if (!bodyAnim) bodyAnim = GetComponentInParent<Animator>();
         if (!bodySR) bodySR = GetComponentInParent<SpriteRenderer>();
         if (!melee) melee = GetComponentInChildren<MeleeHitbox2D>(true);
+
+        AutoWireWeaponRoots();
+        if (!projectileShooter) projectileShooter = GetComponent<WeaponProjectileShooter2D>();
+        if (!shotgunCone) shotgunCone = GetComponent<ShotgunCone2D>();
     }
 
     void Awake()
@@ -135,6 +139,35 @@ public class WeaponAnimatorDriver : MonoBehaviour
         if (!melee) melee = GetComponentInChildren<MeleeHitbox2D>(true);
 
         if (manageHandsFromDriver) ApplyHandsVisibility(true);
+
+        AutoWireWeaponRoots();
+
+        if (!projectileShooter) projectileShooter = GetComponent<WeaponProjectileShooter2D>();
+        if (!shotgunCone) shotgunCone = GetComponent<ShotgunCone2D>();
+    }
+
+    void AutoWireWeaponRoots()
+    {
+        if (!currentWeaponParent)
+        {
+            var item = transform; // este script vive en Item
+            var cw = item.Find("CurrentWeapon");
+            if (!cw && item.parent) cw = item.parent.Find("CurrentWeapon");
+            currentWeaponParent = cw;
+        }
+
+        if (!weaponSockets)
+        {
+            var root = transform.root ? transform.root : transform;
+            weaponSockets = root.Find("Player/Visual/WeaponSockets") ?? root.Find("Visual/WeaponSockets");
+        }
+        if (weaponSockets)
+        {
+            if (!mountDown) mountDown = weaponSockets.Find("Mount_Down");
+            if (!mountRight) mountRight = weaponSockets.Find("Mount_Right");
+            if (!mountLeft) mountLeft = weaponSockets.Find("Mount_Left");
+            if (!mountUp) mountUp = weaponSockets.Find("Mount_Up");
+        }
     }
 
     void Start()
@@ -150,46 +183,34 @@ public class WeaponAnimatorDriver : MonoBehaviour
         if (Input.GetKeyDown(dbgToggleGUIKey)) dbgShowGUI = !dbgShowGUI;
 
         int dirForAnim = GetDir();
-        anim.SetIntegerIfExists(P_Dir, dirForAnim);
-        anim.SetFloatIfExists(P_Speed, GetSpeed());
+        SetIntegerIfExists(anim, P_Dir, dirForAnim);
+        SetFloatIfExists(anim, P_Speed, GetSpeed());
 
-        if (useAutoOffsets) ComputeAutoOffsets();
-
-        // ---------- NUEVO: reflejar 'reserve' según inventario ----------
         if (useInventoryAmmo) SyncReserveFromInventory();
 
-        if (!offsetInLateUpdate)
-            ApplySortingAndOffset(dirForAnim);
+        if (Input.GetKeyDown(firePrimary) || Input.GetKeyDown(fireSecondary))
+            TryShootOrAttack();
 
-        if (Input.GetKeyDown(KeyCode.J)) TryShootOrAttack();
-        if (Input.GetKeyDown(KeyCode.R)) TryStartReload();
+        if (Input.GetKeyDown(reloadKey))
+            TryStartReload();
     }
 
     void LateUpdate()
     {
-        if (!offsetInLateUpdate) return;
         int dir = GetCurrentDirFromAnim();
-        ApplySortingAndOffset(dir);
+        if (useRelativeSortingToBody && bodySR && itemSR)
+        {
+            itemSR.sortingLayerID = bodySR.sortingLayerID;
+            itemSR.sortingOrder = (dir == DIR_UP)
+                ? bodySR.sortingOrder + relativeBackDelta
+                : bodySR.sortingOrder + relativeFrontDelta;
+        }
     }
 
     // --- Helpers de combate ---
-    public void EnableFists()
-    {
-        isMelee = true;
-        if (fists) melee = fists; // usa la hitbox de puños
-    }
-
-    public void UseMeleeHitbox(MeleeHitbox2D hb)
-    {
-        isMelee = true;
-        if (hb) melee = hb;       // usa la hitbox de un arma melee (bat, etc.)
-    }
-
-    public void DisableMelee()
-    {
-        isMelee = false;
-        // no desreferenciamos 'melee' para que conserve la asignación en inspector
-    }
+    public void EnableFists() { isMelee = true; if (fists) melee = fists; }
+    public void UseMeleeHitbox(MeleeHitbox2D hb) { isMelee = true; if (hb) melee = hb; }
+    public void DisableMelee() { isMelee = false; }
 
     // --- SR switcher ---
     public void UseChildSpriteRenderer(bool useChild)
@@ -210,13 +231,14 @@ public class WeaponAnimatorDriver : MonoBehaviour
 
         if (isMelee)
         {
-            anim.SetTriggerIfExists(P_Attack);
+            SetTriggerIfExists(anim, P_Attack);
             return;
         }
 
         if (loaded <= 0) return;
         loaded--;
-        anim.SetTriggerIfExists(P_Shoot);
+        SetTriggerIfExists(anim, P_Shoot);
+
         if (!muzzleViaAnimEvent && muzzle) muzzle.Play(GetCurrentDirFromAnim(), bodySR);
     }
 
@@ -225,10 +247,9 @@ public class WeaponAnimatorDriver : MonoBehaviour
     {
         if (isMelee) return;
 
-        // si usamos inventario y no hay balas → bloquear recarga
         if (useInventoryAmmo && GetCurrentAmmoDef() != null)
         {
-            reserve = GetCurrentAmmoCountSafe(); // asegurar último conteo
+            reserve = GetCurrentAmmoCountSafe();
             if (reserve <= 0) return;
         }
 
@@ -238,27 +259,22 @@ public class WeaponAnimatorDriver : MonoBehaviour
             wasEmpty = (loaded == 0);
             int need = clipSize - loaded;
 
-            // si usamos inventario, vuelve a contar y limita por ese total
             int available = useInventoryAmmo ? GetCurrentAmmoCountSafe() : reserve;
             int add = Mathf.Min(need, available);
             if (add <= 0) return;
 
             loaded += add;
             reserve = Mathf.Max(0, available - add);
-
-            // consumir del inventario real
             if (useInventoryAmmo) ConsumeAmmoFromInventory(add);
 
-            anim.SetBoolIfExists(P_WasEmpty, wasEmpty);
-            anim.SetTriggerIfExists(P_Reload);
+            SetBoolIfExists(anim, P_WasEmpty, wasEmpty);
+            SetTriggerIfExists(anim, P_Reload);
             return;
         }
 
         if (isReloading || loaded >= clipSize || reserve <= 0) return;
 
         wasEmpty = (loaded == 0);
-
-        // shotgun: preparar shellsToLoad limitado por inventario si aplica
         int canLoad = clipSize - loaded;
         int availableShells = useInventoryAmmo ? GetCurrentAmmoCountSafe() : reserve;
         shellsToLoad = Mathf.Min(canLoad, availableShells);
@@ -266,10 +282,10 @@ public class WeaponAnimatorDriver : MonoBehaviour
 
         isReloading = true;
 
-        anim.SetBoolIfExists(P_IsReloading, true);
-        anim.SetIntegerIfExists(P_ShellsToLoad, shellsToLoad);
-        anim.SetBoolIfExists(P_WasEmpty, wasEmpty);
-        anim.SetTriggerIfExists(P_Reload);
+        SetBoolIfExists(anim, P_IsReloading, true);
+        SetIntegerIfExists(anim, P_ShellsToLoad, shellsToLoad);
+        SetBoolIfExists(anim, P_WasEmpty, wasEmpty);
+        SetTriggerIfExists(anim, P_Reload);
     }
 
     // ---------- Animation Events ----------
@@ -279,18 +295,17 @@ public class WeaponAnimatorDriver : MonoBehaviour
 
         if (shellsToLoad > 0)
         {
-            // verificar inventario justo antes de insertar
             if (useInventoryAmmo)
             {
-                if (!ConsumeAmmoFromInventory(1)) // si no pudo consumir, aborta ciclo
+                if (!ConsumeAmmoFromInventory(1))
                 {
                     shellsToLoad = 0;
                     isReloading = false;
-                    anim.SetIntegerIfExists(P_ShellsToLoad, 0);
-                    anim.SetBoolIfExists(P_IsReloading, false);
+                    SetIntegerIfExists(anim, P_ShellsToLoad, 0);
+                    SetBoolIfExists(anim, P_IsReloading, false);
                     return;
                 }
-                reserve = GetCurrentAmmoCountSafe(); // refresca lectura
+                reserve = GetCurrentAmmoCountSafe();
             }
             else
             {
@@ -299,24 +314,59 @@ public class WeaponAnimatorDriver : MonoBehaviour
             }
 
             shellsToLoad--; loaded++;
-            anim.SetIntegerIfExists(P_ShellsToLoad, shellsToLoad);
+            SetIntegerIfExists(anim, P_ShellsToLoad, shellsToLoad);
         }
 
         if (shellsToLoad <= 0)
         {
             isReloading = false;
-            anim.SetIntegerIfExists(P_ShellsToLoad, 0);
-            anim.SetBoolIfExists(P_IsReloading, false);
-            if (wasEmpty) anim.SetTriggerIfExists(P_Rack);
+            SetIntegerIfExists(anim, P_ShellsToLoad, 0);
+            SetBoolIfExists(anim, P_IsReloading, false);
+            if (wasEmpty) SetTriggerIfExists(anim, P_Rack);
         }
     }
 
     public void AE_Muzzle()
     {
+        if (isMelee) return;
+
+        // Fogonazo visual
         if (muzzle) muzzle.Play(GetCurrentDirFromAnim(), bodySR);
+
+        // === ORIGEN CORRECTO, independiente del orden de Update/LateUpdate ===
+        Vector2 origin = (Vector2)GetMuzzleWorldPos_Deterministic();
+
+        int d = GetCurrentDirFromAnim();
+        Vector2 dir = DirToVector(d);
+        GameObject owner = transform.root ? transform.root.gameObject : gameObject;
+
+        if (isShotgun)
+        {
+            if (shotgunCone && shotgunCone.enabled)
+                shotgunCone.Fire(origin, dir, owner);
+        }
+        else
+        {
+            if (projectileShooter && projectileShooter.enabled)
+                projectileShooter.Fire();
+        }
+
+        Debug.DrawLine(origin, origin + dir * 0.5f, Color.magenta, 0.1f);
     }
 
-    // 👉 eventos de melee que llaman al hitbox
+    // --- Helpers ---
+    Vector2 DirToVector(int d)
+    {
+        switch (d)
+        {
+            case 0: return Vector2.down;
+            case 1: return Vector2.right;
+            case 2: return Vector2.left;
+            case 3: return Vector2.up;
+            default: return Vector2.right;
+        }
+    }
+
     public void AE_MeleeStart()
     {
         if (!isMelee || !melee) return;
@@ -330,6 +380,44 @@ public class WeaponAnimatorDriver : MonoBehaviour
         melee.End();
     }
 
+    // ---------- Inventario ----------
+    void SyncReserveFromInventory()
+    {
+        var def = GetCurrentAmmoDef();
+        if (!inventory || !def) return;
+        reserve = inventory.Count(def);
+    }
+
+    ItemDef GetCurrentAmmoDef()
+    {
+        if (!hotbar) return null;
+        string wid = hotbar.CurrentItemId;
+        if (string.IsNullOrEmpty(wid)) return null;
+
+        if (wid == hotbar.idPistol) return ammo9mm;
+        if (wid == hotbar.idGun) return ammoRifle;
+        if (wid == hotbar.idShotgun) return ammoShells;
+        return null;
+    }
+
+    int GetCurrentAmmoCountSafe()
+    {
+        var def = GetCurrentAmmoDef();
+        if (!inventory || !def) return reserve;
+        return inventory.Count(def);
+    }
+
+    bool ConsumeAmmoFromInventory(int amount)
+    {
+        var def = GetCurrentAmmoDef();
+        if (!inventory || !def || amount <= 0) return false;
+        int before = inventory.Count(def);
+        if (before < amount) return false;
+        bool ok = inventory.TryRemove(def, amount);
+        if (ok) reserve = Mathf.Max(0, before - amount);
+        return ok;
+    }
+
     // ---------- Utilidades ----------
     void ApplyHandsVisibility(bool enablePhase)
     {
@@ -338,62 +426,14 @@ public class WeaponAnimatorDriver : MonoBehaviour
         handsGO.SetActive(show);
     }
 
-    void ApplySortingAndOffset(int dir)
-    {
-        if (useRelativeSortingToBody && bodySR && itemSR)
-        {
-            itemSR.sortingLayerID = bodySR.sortingLayerID;
-            itemSR.sortingOrder = (dir == DIR_UP)
-                ? bodySR.sortingOrder + relativeBackDelta
-                : bodySR.sortingOrder + relativeFrontDelta;
-        }
-
-        Vector2 off = dir switch
-        {
-            DIR_DOWN => offsetDown,
-            DIR_UP => offsetUp,
-            DIR_LEFT => (swapLeftRight ? offsetRight : offsetLeft),
-            DIR_RIGHT => (swapLeftRight ? offsetLeft : offsetRight),
-            _ => Vector2.zero
-        };
-
-        if (snapToPixelGrid)
-        {
-            if (snapInWorldSpace)
-            {
-                Vector2 parentPos = transform.parent ? (Vector2)transform.parent.position : Vector2.zero;
-                Vector2 world = parentPos + off;
-                Vector2 snapped = SnapToPixels(world);
-                transform.position = new Vector3(snapped.x, snapped.y, transform.position.z);
-            }
-            else
-            {
-                Vector2 snappedLocal = SnapToPixels(off);
-                transform.localPosition = new Vector3(snappedLocal.x, snappedLocal.y, transform.localPosition.z);
-            }
-        }
-        else
-        {
-            transform.localPosition = new Vector3(off.x, off.y, transform.localPosition.z);
-        }
-    }
-
-    void ComputeAutoOffsets()
-    {
-        if (!bodySR || !bodySR.sprite) return;
-        float halfH = bodySR.sprite.bounds.extents.y;
-        offsetDown.y = -halfH * downFracFromMid;
-        offsetUp.y = halfH * upFracFromMid;
-    }
-
     int GetDir()
     {
-        if (bodyAnim && bodyAnim.HasParameter(P_Dir))
+        if (HasParam(anim, P_Dir) && bodyAnim && HasParam(bodyAnim, P_Dir))
             return bodyAnim.GetInteger(P_Dir);
 
         Vector2 v = playerRb ? playerRb.linearVelocity : Vector2.zero;
         if (v.sqrMagnitude < 0.0001f)
-            return anim ? anim.GetInteger(P_Dir) : DIR_DOWN;
+            return HasParam(anim, P_Dir) ? anim.GetInteger(P_Dir) : DIR_DOWN;
 
         if (Mathf.Abs(v.x) > Mathf.Abs(v.y))
             return (v.x >= 0f) ? DIR_RIGHT : DIR_LEFT;
@@ -401,11 +441,11 @@ public class WeaponAnimatorDriver : MonoBehaviour
             return (v.y >= 0f) ? DIR_UP : DIR_DOWN;
     }
 
-    int GetCurrentDirFromAnim()
+    public int GetCurrentDirFromAnim()
     {
-        if (bodyAnim && bodyAnim.HasParameter(P_Dir))
+        if (bodyAnim && HasParam(bodyAnim, P_Dir))
             return bodyAnim.GetInteger(P_Dir);
-        return anim ? anim.GetInteger(P_Dir) : DIR_DOWN;
+        return HasParam(anim, P_Dir) ? anim.GetInteger(P_Dir) : DIR_DOWN;
     }
 
     float GetSpeed() => playerRb ? playerRb.linearVelocity.magnitude : 0f;
@@ -438,63 +478,122 @@ public class WeaponAnimatorDriver : MonoBehaviour
         if (!bodyAnim) bodyAnim = GetComponentInParent<Animator>();
         if (!bodySR) bodySR = GetComponentInParent<SpriteRenderer>();
         if (!melee) melee = GetComponentInChildren<MeleeHitbox2D>(true);
+
+        AutoWireWeaponRoots();
+
+        if (!projectileShooter) projectileShooter = GetComponent<WeaponProjectileShooter2D>();
+        if (!shotgunCone) shotgunCone = GetComponent<ShotgunCone2D>();
     }
 
-    // ---------- Pixel helpers ----------
-    float GetPPU()
+    // ===== Helpers locales =====
+    static bool HasParam(Animator a, int hash)
     {
-        if (pixelsPerUnitOverride > 0) return pixelsPerUnitOverride;
-        if (itemSR && itemSR.sprite) return itemSR.sprite.pixelsPerUnit;
-        if (bodySR && bodySR.sprite) return bodySR.sprite.pixelsPerUnit;
-        return 16f;
+        if (!a) return false;
+        foreach (var p in a.parameters) if (p.nameHash == hash) return true;
+        return false;
     }
+    static void SetTriggerIfExists(Animator a, int h) { if (a && HasParam(a, h)) a.SetTrigger(h); }
+    static void SetBoolIfExists(Animator a, int h, bool v) { if (a && HasParam(a, h)) a.SetBool(h, v); }
+    static void SetIntegerIfExists(Animator a, int h, int v) { if (a && HasParam(a, h)) a.SetInteger(h, v); }
+    static void SetFloatIfExists(Animator a, int h, float v) { if (a && HasParam(a, h)) a.SetFloat(h, v); }
 
-    Vector2 SnapToPixels(Vector2 worldPos)
+    static Transform FindDeep(Transform t, string name)
     {
-        float ppu = GetPPU();
-        return new Vector2(
-            Mathf.Round(worldPos.x * ppu) / ppu,
-            Mathf.Round(worldPos.y * ppu) / ppu
-        );
-    }
-
-    // ---------- NUEVO: helpers de munición / inventario ----------
-    void SyncReserveFromInventory()
-    {
-        var def = GetCurrentAmmoDef();
-        if (!inventory || !def) return;
-        reserve = inventory.Count(def); // solo lectura; el consumo se hace en recarga
-    }
-
-    ItemDef GetCurrentAmmoDef()
-    {
-        if (!hotbar) return null;
-        string wid = hotbar.CurrentItemId;
-        if (string.IsNullOrEmpty(wid)) return null;
-
-        if (wid == hotbar.idPistol) return ammo9mm;
-        if (wid == hotbar.idGun) return ammoRifle;
-        if (wid == hotbar.idShotgun) return ammoShells;
-        // bat u otros -> sin munición
+        if (!t) return null;
+        if (t.name == name) return t;
+        for (int i = 0; i < t.childCount; i++)
+        {
+            var r = FindDeep(t.GetChild(i), name);
+            if (r) return r;
+        }
         return null;
     }
 
-    int GetCurrentAmmoCountSafe()
+    Transform GetWeaponRoot()
     {
-        var def = GetCurrentAmmoDef();
-        if (!inventory || !def) return reserve;
-        return inventory.Count(def);
+        if (!currentWeaponParent || currentWeaponParent.childCount == 0) return null;
+        return currentWeaponParent.GetChild(0);
     }
 
-    bool ConsumeAmmoFromInventory(int amount)
+    Transform GetAnchors()
     {
-        var def = GetCurrentAmmoDef();
-        if (!inventory || !def || amount <= 0) return false;
-        // intenta remover; si no alcanza, retorna false
-        int before = inventory.Count(def);
-        if (before < amount) return false;
-        bool ok = inventory.TryRemove(def, amount);
-        if (ok) reserve = Mathf.Max(0, before - amount);
-        return ok;
+        var root = GetWeaponRoot();
+        if (!root) return null;
+        var a = root.Find(anchorsContainerName);
+        if (!a) a = FindDeep(root, anchorsContainerName);
+        return a;
+    }
+
+    Transform GetGripForDir(Transform anchors, int dir)
+    {
+        if (!anchors) return null;
+        switch (dir)
+        {
+            case 0: return anchors.Find(gripDownName);
+            case 1: return anchors.Find(gripRightName);
+            case 2: return anchors.Find(gripLeftName);
+            case 3: return anchors.Find(gripUpName);
+            default: return null;
+        }
+    }
+
+    Transform GetMuzzleForDir(Transform anchors, int dir)
+    {
+        if (!anchors) return null;
+        switch (dir)
+        {
+            case 0: return anchors.Find(muzzleDownName);
+            case 1: return anchors.Find(muzzleRightName);
+            case 2: return anchors.Find(muzzleLeftName);
+            case 3: return anchors.Find(muzzleUpName);
+            default: return null;
+        }
+    }
+
+    Transform GetSocketForDir(int dir)
+    {
+        switch (dir)
+        {
+            case 0: return mountDown;
+            case 1: return mountRight;
+            case 2: return mountLeft;
+            case 3: return mountUp;
+            default: return null;
+        }
+    }
+
+    // === POSICIÓN DETERMINÍSTICA: socket + (muzzle_local - grip_local) ===
+    public Vector3 GetMuzzleWorldPos_Deterministic()
+    {
+        int dir = GetCurrentDirFromAnim();
+        var anchors = GetAnchors();
+        var grip = GetGripForDir(anchors, dir);
+        var muz = GetMuzzleForDir(anchors, dir);
+        var sock = GetSocketForDir(dir);
+
+        if (anchors && grip && muz && sock)
+        {
+            // delta en espacio local del prefab del arma (constante)
+            Vector3 delta = muz.localPosition - grip.localPosition;
+
+            // asumiendo sin rotaciones raras: sumamos el delta al socket world
+            var p = sock.position + delta;
+            return new Vector3(p.x, p.y, 0f);
+        }
+
+        // Fallbacks
+        if (muzzle) return muzzle.transform.position;
+        return transform.position;
+    }
+
+    // (dejo también la lectura "directa" por si la quieres usar en otros scripts)
+    public Vector3 GetMuzzleWorldPosFromCurrentWeapon()
+    {
+        int dir = GetCurrentDirFromAnim();
+        var anchors = GetAnchors();
+        var muz = GetMuzzleForDir(anchors, dir);
+        if (muz) return new Vector3(muz.position.x, muz.position.y, 0f);
+        if (muzzle) return muzzle.transform.position;
+        return transform.position;
     }
 }

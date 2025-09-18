@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4c57d175884538d45be962bc1f00bcaa, type: 3}
+  m_Name: Zombie_Axe_Config
+  m_EditorClassIdentifier: Assembly-CSharp::ZombieConfig
+  moveSpeed: 1.8
+  acceleration: 12
+  deceleration: 14
+  detectionRadius: 6
+  playerMask:
+    serializedVersion: 2
+    m_Bits: 128
+  aggroHoldSeconds: 3
+  loseSightDistanceFactor: 1.6
+  attackRangeA: 0.5
+  attackCooldownA: 1
+  attackDamageA: 1
+  attackKnockbackA: 3
+  special: 1
+  attackRangeB: 6
+  attackCooldownB: 1.4
+  attackDamageB: 1
+  attackKnockbackB: 3
+  axeProjectilePrefab: {fileID: 7780215246768318119, guid: f070072d5088de0419802d6ff7b276bd, type: 3}
+  projectileSpeed: 8
+  projectileLife: 0.8
+  projectileMaxDistance: 6
+  projectileSpawnOffset: {x: 0.2, y: 0.2}
+  projectileHitMask:
+    serializedVersion: 2
+    m_Bits: 128
+  throwMinDistance: 1.45
+  throwMaxDistance: 5.5
+  pickupDecisionDistance: 3
+  throwImmediatelyAfterPickup: 1
+  genericProjectilePrefab: {fileID: 0}
+  slamRadius: 1.6
+  slamMask:
+    serializedVersion: 2
+    m_Bits: 128
+  dashSpeed: 6
+  dashTime: 0.25
+  dropAmmoChance: 0.45
+  dropMedkitChance: 0.25
+  ammoPickupPrefab: {fileID: 0}
+  medkitPickupPrefab: {fileID: 550197948729579310, guid: 1e12a7ff6ee21a043a11d36efe8b87c2, type: 3}
+  ammoTable:
+  - prefab: {fileID: 7086205020830769303, guid: e587bd0093f807e438094d69c0436510, type: 3}
+    weight: 1
+  - prefab: {fileID: 2564202455781419765, guid: 8b4d18e991ddf974684113ba7af66497, type: 3}
+    weight: 1
+  - prefab: {fileID: 5150645597442775953, guid: ab06d1e87d5c8b24383bce9a5d06d181, type: 3}
+    weight: 1
+  deathVfxPrefab: {fileID: 0}
+  deathSfx: {fileID: 0}

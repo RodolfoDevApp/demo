@@ -5,47 +5,52 @@ public class PlayerDeathAnimatorSync : MonoBehaviour
 {
     [Header("Refs")]
     public PlayerHealth health;
-    public Animator bodyAnim;    // Body (tiene isDeath + DeatType + Dir)
-    public Animator handsAnim;   // Hands (solo isDeath)
-    public Animator weaponAnim;  // Item/Weapon (solo isDeath)
+    public Animator bodyAnim;    // Player/Visual/Body (isDeath, DeatType, Dir)
+    public Animator handsAnim;   // Player/Visual/Hands (isDeath)
+    public Animator weaponAnim;  // Player/Visual/Item  (isDeath)
 
-    [Header("Animator Params")]
-    public string isDeathParam = "isDeath";   // bool
-    public string deathTypeParam = "DeatType";  // int (0..2) — SOLO en Body
-    public string dirParam = "Dir";       // int: 0=down,1=right,2=left,3=up (según tu setup)
+    [Header("Afectar a:")]
+    public bool affectBody = false;   // deja false si DeathFlowCoordinator ya controla el body
+    public bool affectHands = true;
+    public bool affectWeapon = true;
+
+    [Header("Animator params")]
+    public string isDeathParam = "isDeath";     // bool
+    public string deathTypeParam = "DeatType";  // int solo en body
+    public string dirParam = "Dir";             // 0=down,1=right,2=left,3=up
     public int defaultDeathType = 0;
 
     int _isDeathHash, _deathTypeHash, _dirHash;
-    bool _applied;
 
     void Reset()
     {
-        if (!health) health = GetComponentInParent<PlayerHealth>() ?? GetComponent<PlayerHealth>();
+        health ??= GetComponentInParent<PlayerHealth>() ?? GetComponent<PlayerHealth>();
 
         if (!bodyAnim)
         {
-            var t = transform.root.Find("Player/Visual/Body");
+            var t = transform.root ? transform.root.Find("Player/Visual/Body") : null;
             if (t) bodyAnim = t.GetComponent<Animator>();
-            if (!bodyAnim) bodyAnim = GetComponentInChildren<Animator>();
+            if (!bodyAnim) bodyAnim = GetComponentInChildren<Animator>(true);
         }
         if (!handsAnim)
         {
-            var t = transform.root.Find("Player/Visual/Hands");
+            var t = transform.root ? transform.root.Find("Player/Visual/Hands") : null;
             if (t) handsAnim = t.GetComponent<Animator>();
         }
         if (!weaponAnim)
         {
-            var t = transform.root.Find("Player/Visual/Item");
+            var t = transform.root ? transform.root.Find("Player/Visual/Item") : null;
             if (t) weaponAnim = t.GetComponent<Animator>();
         }
     }
 
     void Awake()
     {
-        _isDeathHash = Animator.StringToHash(isDeathParam);
-        _deathTypeHash = Animator.StringToHash(deathTypeParam);
-        _dirHash = Animator.StringToHash(dirParam);
-        if (!health) health = GetComponentInParent<PlayerHealth>() ?? GetComponent<PlayerHealth>();
+        _isDeathHash = Animator.StringToHash(string.IsNullOrEmpty(isDeathParam) ? "isDeath" : isDeathParam);
+        _deathTypeHash = Animator.StringToHash(string.IsNullOrEmpty(deathTypeParam) ? "DeatType" : deathTypeParam);
+        _dirHash = Animator.StringToHash(string.IsNullOrEmpty(dirParam) ? "Dir" : dirParam);
+
+        health ??= GetComponentInParent<PlayerHealth>() ?? GetComponent<PlayerHealth>();
     }
 
     void OnEnable()
@@ -68,72 +73,71 @@ public class PlayerDeathAnimatorSync : MonoBehaviour
 
     void HandleDeath()
     {
-        if (_applied) return;
-        _applied = true;
+        // body
+        if (affectBody) ApplyDeath_Body(bodyAnim);
 
-        // --- FIX: normalizar Dir antes de activar isDeath ---
-        NormalizeDirForDeath(bodyAnim);
+        // manos
+        if (affectHands) ApplyDeath_Simple(handsAnim);
 
-        ApplyDeath_Body(bodyAnim);       // Body: isDeath + DeatType (si existe)
-        ApplyDeath_Simple(handsAnim);    // Hands: solo isDeath
-        ApplyDeath_Simple(weaponAnim);   // Item:  solo isDeath
+        // arma
+        if (affectWeapon) ApplyDeath_Simple(weaponAnim);
     }
 
     void HandleRevive()
     {
-        _applied = false;
-
-        ClearDeath(bodyAnim);
-        ClearDeath(handsAnim);
-        ClearDeath(weaponAnim);
+        if (affectBody) ClearDeath(bodyAnim);
+        if (affectHands) ClearDeath(handsAnim);
+        if (affectWeapon) ClearDeath(weaponAnim);
     }
 
-    // ---------- helpers ----------
-    static bool HasParam(Animator a, int hash)
+    // helpers
+    static bool HasParam(Animator a, int hash, AnimatorControllerParameterType type)
     {
         if (!a) return false;
-        foreach (var p in a.parameters)
-            if (p.nameHash == hash) return true;
+        var ps = a.parameters;
+        for (int i = 0; i < ps.Length; i++)
+            if (ps[i].nameHash == hash && ps[i].type == type) return true;
         return false;
     }
 
     void NormalizeDirForDeath(Animator a)
     {
-        if (!a) return;
-        if (!HasParam(a, _dirHash)) return;
-
-        // Leemos el Dir actual y lo colapsamos a Right(1) o Left(2)
+        if (!a || !HasParam(a, _dirHash, AnimatorControllerParameterType.Int)) return;
         int dir = a.GetInteger(_dirHash);
-        int collapsed = (dir <= 1) ? 1 : 2; // 0/1 -> 1 (right), 2/3 -> 2 (left)
+        // colapsa up/down a una lateral para reuse de clips
+        int collapsed = (dir == 1 || dir == 2) ? dir : 2; // usa izquierda por defecto
         a.SetInteger(_dirHash, collapsed);
-        if (a.isActiveAndEnabled) { a.Update(0f); }
     }
 
     void ApplyDeath_Body(Animator a)
     {
         if (!a) return;
 
-        if (HasParam(a, _isDeathHash)) a.SetBool(_isDeathHash, true);
-        if (HasParam(a, _deathTypeHash)) a.SetInteger(_deathTypeHash, defaultDeathType);
+        NormalizeDirForDeath(a);
 
-        if (a.isActiveAndEnabled) { a.Rebind(); a.Update(0f); }
+        if (HasParam(a, _isDeathHash, AnimatorControllerParameterType.Bool))
+            a.SetBool(_isDeathHash, true);
+
+        if (HasParam(a, _deathTypeHash, AnimatorControllerParameterType.Int))
+            a.SetInteger(_deathTypeHash, defaultDeathType);
+
+        // no usar Animator.Update
+        if (a.isActiveAndEnabled) a.Rebind(); // opcional para reset de layers
     }
 
     void ApplyDeath_Simple(Animator a)
     {
         if (!a) return;
-
-        if (HasParam(a, _isDeathHash)) a.SetBool(_isDeathHash, true);
-
-        if (a.isActiveAndEnabled) { a.Rebind(); a.Update(0f); }
+        if (HasParam(a, _isDeathHash, AnimatorControllerParameterType.Bool))
+            a.SetBool(_isDeathHash, true);
+        if (a.isActiveAndEnabled) a.Rebind(); // opcional
     }
 
     void ClearDeath(Animator a)
     {
         if (!a) return;
-
-        if (HasParam(a, _isDeathHash)) a.SetBool(_isDeathHash, false);
-
-        if (a.isActiveAndEnabled) { a.Rebind(); a.Update(0f); }
+        if (HasParam(a, _isDeathHash, AnimatorControllerParameterType.Bool))
+            a.SetBool(_isDeathHash, false);
+        if (a.isActiveAndEnabled) a.Rebind();
     }
 }

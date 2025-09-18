@@ -13,13 +13,13 @@ public class MeleeHitbox2D : MonoBehaviour
     public float knockback = 3f;
 
     [Header("Referencia de tamaño/centro")]
-    public SpriteRenderer referenceSR; // si lo dejas vacío, toma driver.itemSRRoot / itemSR / bodySR
+    public SpriteRenderer referenceSR; // si lo dejas vacio, toma driver.itemSRRoot / itemSR / bodySR
 
     [Header("Tamaños del hitbox (local)")]
     public Vector2 sizeSide = new(0.18f, 0.36f); // L/R (vertical)
     public Vector2 sizeUpDown = new(0.36f, 0.18f); // U/D (horizontal)
 
-    [Header("Separación respecto al borde")]
+    [Header("Separacion respecto al borde")]
     public float edgeGap = 0.02f;
 
     [Header("Ajustes finos")]
@@ -31,13 +31,19 @@ public class MeleeHitbox2D : MonoBehaviour
     public bool followWhileOpen = true;
 
     [Header("Autocierre (failsafe)")]
-    [Tooltip("Tiempo máximo que puede quedar abierta la ventana si no llega AE_MeleeStop")]
+    [Tooltip("Tiempo maximo que puede quedar abierta la ventana si no llega AE_MeleeStop")]
     public float maxWindowSeconds = 0.30f;
     [Tooltip("Si el driver deja de estar en modo melee, se cierra la ventana")]
     public bool autoCloseIfDriverLeavesMelee = true;
 
     [Header("Mapping Dir (0=D,1=R,2=L,3=U)")]
     public int mapDown = 0, mapRight = 1, mapLeft = 2, mapUp = 3;
+
+    [Header("Compatibilidad")]
+    [Tooltip("Usa reflexion como ultimo recurso. Desactivado por rendimiento.")]
+    public bool enableReflectionFallback = false;
+    [Tooltip("Ademas del camino rapido, envia SendMessage(\"ApplyDamage\", float) como compat extra.")]
+    public bool alsoSendMessageFallback = true;
 
     [Header("Debug")]
     public bool drawGizmo = true;
@@ -48,7 +54,7 @@ public class MeleeHitbox2D : MonoBehaviour
     WeaponAnimatorDriver driver;
     bool windowOpen = false;
     int activeDir = 0;           // 0..3
-    float closeAt = -1f;          // Time.time al que se auto-cierra
+    float closeAt = -1f;         // Time.time al que se auto-cierra
     readonly HashSet<Collider2D> alreadyHit = new();
 
     void Reset()
@@ -87,7 +93,7 @@ public class MeleeHitbox2D : MonoBehaviour
             return;
         }
 
-        // Failsafe 2: si se cambió a arma de fuego en medio del swing
+        // Failsafe 2: si se cambio a arma de fuego en medio del swing
         if (autoCloseIfDriverLeavesMelee && driver && !driver.isMelee)
         {
             End();
@@ -105,7 +111,7 @@ public class MeleeHitbox2D : MonoBehaviour
         alreadyHit.Clear();
         if (col) col.enabled = true;
 
-        closeAt = Time.time + Mathf.Max(0.02f, maxWindowSeconds); // margen mínimo
+        closeAt = Time.time + Mathf.Max(0.02f, maxWindowSeconds); // margen minimo
         PlaceHitbox();
     }
 
@@ -115,10 +121,10 @@ public class MeleeHitbox2D : MonoBehaviour
         if (col) col.enabled = false;
     }
 
-    // alias útil por si quieres forzar desde fuera
+    // alias util por si quieres forzar desde fuera
     public void EndImmediate() => End();
 
-    // -------- Colocación del hitbox --------
+    // -------- Colocacion del hitbox --------
     void PlaceHitbox()
     {
         var sr = referenceSR;
@@ -204,11 +210,47 @@ public class MeleeHitbox2D : MonoBehaviour
         dir.Normalize();
         Vector2 impulse = dir * knockback;
 
-        TryApplyDamage(other.gameObject, damage, hitPoint, impulse);
+        ApplyDamageFast(other.gameObject, damage, hitPoint, impulse);
     }
 
-    // --- compat con DamageInfo / IDamageable ---
-    static void TryApplyDamage(GameObject target, float dmg, Vector2 point, Vector2 impulse)
+    // Camino rapido: PlayerHealth > IDamageable > SendMessage > (opcional) Reflexion
+    void ApplyDamageFast(GameObject target, float dmg, Vector2 point, Vector2 impulse)
+    {
+        // PlayerHealth directo
+        var ph = target.GetComponentInParent<PlayerHealth>();
+        if (ph != null)
+        {
+            int amount = Mathf.RoundToInt(Mathf.Max(1f, dmg));
+            ph.TakeDamage(amount);
+            return;
+        }
+
+        // IDamageable con DamageInfo
+        var idmg = target.GetComponentInParent<IDamageable>();
+        if (idmg != null)
+        {
+            Vector2 dir = impulse.sqrMagnitude > 0.0001f ? impulse.normalized : Vector2.right;
+            var info = new DamageInfo(dmg, dir, point, DamageKind.Melee, impulse.magnitude, gameObject, gameObject);
+            idmg.ApplyDamage(info);
+            return;
+        }
+
+        // Fallback ligero
+        if (alsoSendMessageFallback)
+        {
+            target.SendMessage("ApplyDamage", dmg, SendMessageOptions.DontRequireReceiver);
+            if (!enableReflectionFallback) return;
+        }
+
+        // Fallback pesado (opcional) usando reflexion
+        if (enableReflectionFallback)
+        {
+            TryApplyDamageReflection(target, dmg, point, impulse);
+        }
+    }
+
+    // Implementacion de compat por reflexion (solo si enableReflectionFallback = true)
+    static void TryApplyDamageReflection(GameObject target, float dmg, Vector2 point, Vector2 impulse)
     {
         var comps = target.GetComponents<Component>();
         var dmgInfoType = FindTypeByName("DamageInfo");

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 [DisallowMultipleComponent]
@@ -15,39 +16,64 @@ public class PlayerDeathLocker : MonoBehaviour
     public string speedParam = "Speed";
 
     [Header("Comportamiento")]
-    public bool lockImmediately = false; // << respeta el toggle del inspector
+    public bool lockImmediately = false;
 
     bool locked;
 
-    void Reset()
-    {
-        health ??= GetComponentInParent<PlayerHealth>() ?? GetComponent<PlayerHealth>();
-        rb ??= GetComponent<Rigidbody2D>() ?? GetComponentInParent<Rigidbody2D>();
+    // refs internas para ordenar habilitacion
+    PlayerController2D _pc;
+    WeaponHotbarSimple _whs;
+    PickupController _pick;
+    HandsAnimatorDriver _hands;
+    WeaponAnimatorDriver _weap;
 
-        var pc = GetComponent<PlayerController2D>() ?? GetComponentInParent<PlayerController2D>();
-        var whs = GetComponent<WeaponHotbarSimple>() ?? GetComponentInChildren<WeaponHotbarSimple>(true);
-        var pick = GetComponent<PickupController>() ?? GetComponentInParent<PickupController>();
-        var hands = GetComponentInChildren<HandsAnimatorDriver>(true);
-        var weap = GetComponentInChildren<WeaponAnimatorDriver>(true);
-
-        toDisable = new MonoBehaviour[] { pc, whs, pick, hands, weap };
-
-        if (!bodyAnim)
-        {
-            var t = transform.root.Find("Player/Visual/Body");
-            if (t) bodyAnim = t.GetComponent<Animator>();
-            if (!bodyAnim) bodyAnim = GetComponentInChildren<Animator>();
-        }
-    }
+    void Reset() { AutoWire(); }
+    void Awake() { AutoWire(); } // SIEMPRE
 
     void OnEnable()
     {
-        if (health && lockImmediately) health.OnDeath.AddListener(LockNow);
+        if (health)
+        {
+            if (lockImmediately) health.OnDeath.AddListener(LockNow);
+            health.OnRevive.AddListener(UnlockForRespawn);
+        }
     }
 
     void OnDisable()
     {
-        if (health && lockImmediately) health.OnDeath.RemoveListener(LockNow);
+        if (health)
+        {
+            if (lockImmediately) health.OnDeath.RemoveListener(LockNow);
+            health.OnRevive.RemoveListener(UnlockForRespawn);
+        }
+    }
+
+    void AutoWire()
+    {
+        health ??= GetComponentInParent<PlayerHealth>() ?? GetComponent<PlayerHealth>();
+        rb ??= GetComponent<Rigidbody2D>() ?? GetComponentInParent<Rigidbody2D>();
+
+        _pc = GetComponent<PlayerController2D>() ?? GetComponentInParent<PlayerController2D>();
+        _whs = GetComponent<WeaponHotbarSimple>() ?? GetComponentInChildren<WeaponHotbarSimple>(true);
+        _pick = GetComponent<PickupController>() ?? GetComponentInParent<PickupController>();
+        _hands = GetComponentInChildren<HandsAnimatorDriver>(true);
+        _weap = GetComponentInChildren<WeaponAnimatorDriver>(true);
+
+        if (!bodyAnim)
+        {
+            var t = transform.root ? transform.root.Find("Player/Visual/Body") : null;
+            if (t) bodyAnim = t.GetComponent<Animator>();
+            if (!bodyAnim) bodyAnim = GetComponentInChildren<Animator>(true);
+        }
+
+        // reconstruye toDisable limpio y en orden
+        var list = new List<MonoBehaviour>(8);
+        if (_pc) list.Add(_pc);
+        if (_whs) list.Add(_whs);
+        if (_pick) list.Add(_pick);
+        if (_hands) list.Add(_hands);
+        if (_weap) list.Add(_weap);
+        toDisable = list.ToArray();
     }
 
     public void LockNow()
@@ -56,11 +82,12 @@ public class PlayerDeathLocker : MonoBehaviour
         locked = true;
 
         if (toDisable != null)
-            foreach (var mb in toDisable)
-                if (mb && mb.enabled) mb.enabled = false;
+            for (int i = 0; i < toDisable.Length; i++)
+                if (toDisable[i] && toDisable[i].enabled) toDisable[i].enabled = false;
 
         if (rb)
         {
+            rb.simulated = true;
             rb.linearVelocity = Vector2.zero;
             rb.angularVelocity = 0f;
             rb.constraints = RigidbodyConstraints2D.FreezeAll;
@@ -72,11 +99,32 @@ public class PlayerDeathLocker : MonoBehaviour
 
     public void UnlockForRespawn()
     {
+        // por si algo cambio en runtime
+        AutoWire();
         locked = false;
-        if (rb) rb.constraints = RigidbodyConstraints2D.FreezeRotation;
 
+        if (rb)
+        {
+            rb.simulated = true;
+            rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+            rb.WakeUp();
+        }
+
+        // habilitar en orden de dependencias
+        if (_hands) _hands.enabled = true;
+        if (_weap) _weap.enabled = true;
+        if (_whs) _whs.enabled = true;
+        if (_pick) _pick.enabled = true;
+        if (_pc) _pc.enabled = true;
+
+        // fallback: asegurar que TODO quede enabled
         if (toDisable != null)
-            foreach (var mb in toDisable)
-                if (mb) mb.enabled = true;
+            for (int i = 0; i < toDisable.Length; i++)
+                if (toDisable[i]) toDisable[i].enabled = true;
     }
+
+    [ContextMenu("Force Unlock Now")]
+    void CM_ForceUnlock() => UnlockForRespawn();
 }

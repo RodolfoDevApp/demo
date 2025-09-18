@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 753930eae10d34345a2d52b7bfdff8d5, type: 3}
+  m_Name: Zombie_Big_Config
+  m_EditorClassIdentifier: Assembly-CSharp::ZombieBigConfig
+  detectionRadius: 9
+  aggroHoldSeconds: 4
+  moveSpeed: 2.2
+  acceleration: 14
+  deceleration: 18
+  attackARange: 0.5
+  attackACooldown: 1.1
+  slamRadius: 3
+  slamMask:
+    serializedVersion: 2
+    m_Bits: 128
+  slamDamage: 1
+  slamKnockback: 4
+  slamCooldown: 1.6
+  slamAutoHitDelay: 0.18
+  slamDecisionMin: 1.2
+  slamDecisionMax: 4.5
+  slamOffsetDown: {x: 0, y: -0.1}
+  slamOffsetRight: {x: 0.7, y: -0.05}
+  slamOffsetLeft: {x: -0.7, y: -0.05}
+  slamOffsetUp: {x: 0, y: 0.55}

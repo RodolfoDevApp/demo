@@ -9,12 +9,12 @@ public class PlayerController2D : MonoBehaviour
     Rigidbody2D rb;
     Animator bodyAnim;   // Animator del hijo "Body"
     Vector2 input;
-    int lastDir = 0;     // 0=down,1=left,2=right,3=up
+    // Mapping: 0=down, 1=right, 2=left, 3=up
+    int lastDir = 0;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        // Busca el Animator del Body
         var body = transform.Find("Body");
         if (body) bodyAnim = body.GetComponent<Animator>();
         if (!bodyAnim) bodyAnim = GetComponentInChildren<Animator>();
@@ -27,10 +27,8 @@ public class PlayerController2D : MonoBehaviour
             Input.GetAxisRaw("Vertical")
         ).normalized;
 
-        // Dirección solo si nos movemos, si no, conserva la última
         if (input.sqrMagnitude > 0.0001f) lastDir = ToDir(input);
 
-        // Anims del Body
         if (bodyAnim)
         {
             bodyAnim.SetInteger("Dir", lastDir);
@@ -45,7 +43,7 @@ public class PlayerController2D : MonoBehaviour
 
     int ToDir(Vector2 v)
     {
-        if (Mathf.Abs(v.x) > Mathf.Abs(v.y)) return (v.x >= 0f) ? 1 : 2;
-        return (v.y >= 0f) ? 3 : 0;
+        if (Mathf.Abs(v.x) > Mathf.Abs(v.y)) return (v.x >= 0f) ? 1 : 2; // right/left
+        return (v.y >= 0f) ? 3 : 0;                                      // up/down
     }
 }

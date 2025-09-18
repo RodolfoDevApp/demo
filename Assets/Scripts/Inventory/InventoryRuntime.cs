@@ -22,8 +22,12 @@ public class InventoryRuntime : MonoBehaviour
     [Min(1)] public int inventorySize = 16;
 
     [Header("Preferencias")]
-    [Tooltip("Si está activo, los pickups intentan entrar primero al Inventario y luego a la Hotbar.")]
+    [Tooltip("Si está activo, los pickups intentan entrar primero al Inventario y luego a la Hotbar, salvo los de 'autoHotbar'.")]
     public bool pickupToInventoryFirst = true;
+
+    [Header("Auto a Hotbar (armas, medkits, etc.)")]
+    [Tooltip("Cualquier ItemDef en esta lista intentará ir primero a la Hotbar, y luego al inventario si no hay espacio.")]
+    public ItemDef[] autoHotbar;
 
     [Header("Estado (runtime)")]
     public Stack[] hotbar;      // 1..6
@@ -37,7 +41,6 @@ public class InventoryRuntime : MonoBehaviour
     }
 
 #if UNITY_EDITOR
-    // Si modificas valores en el Inspector durante Play ? refresca
     void OnValidate()
     {
         if (Application.isPlaying) NotifyChanged();
@@ -153,20 +156,39 @@ public class InventoryRuntime : MonoBehaviour
         return added;
     }
 
+    // --- NUEVO: ruta de pickup con preferencia autoHotbar ---
     public bool TryPickup(ItemDef item, int amount)
     {
         if (!item || amount <= 0) return false;
 
-        if (pickupToInventoryFirst)
-        {
-            if (TryAddToInventory(item, amount)) return true;
-            return TryAddToHotbar(item, amount);
-        }
-        else
+        bool forceToHotbar = IsInAutoHotbar(item);
+
+        if (forceToHotbar)
         {
             if (TryAddToHotbar(item, amount)) return true;
             return TryAddToInventory(item, amount);
         }
+        else
+        {
+            if (pickupToInventoryFirst)
+            {
+                if (TryAddToInventory(item, amount)) return true;
+                return TryAddToHotbar(item, amount);
+            }
+            else
+            {
+                if (TryAddToHotbar(item, amount)) return true;
+                return TryAddToInventory(item, amount);
+            }
+        }
+    }
+
+    bool IsInAutoHotbar(ItemDef item)
+    {
+        if (autoHotbar == null) return false;
+        for (int i = 0; i < autoHotbar.Length; i++)
+            if (autoHotbar[i] == item) return true;
+        return false;
     }
 
     // ---- Remover (usar consumibles o gastar munición) ----
@@ -198,7 +220,7 @@ public class InventoryRuntime : MonoBehaviour
         return amount;
     }
 
-    // ---- NUEVO: contar cantidad total de un item (para munición) ----
+    // ---- contar cantidad total de un item (para munición) ----
     public int Count(ItemDef item)
     {
         if (!item) return 0;
@@ -206,7 +228,7 @@ public class InventoryRuntime : MonoBehaviour
         for (int i = 0; i < inventory.Length; i++)
             if (!inventory[i].IsEmpty && inventory[i].item == item) total += inventory[i].amount;
         for (int i = 0; i < hotbar.Length; i++)
-            if (!hotbar[i].IsEmpty && hotbar[i].item == item) total += hotbar[i].amount;
+            if (!hotbar[i].IsEmpty && hotbar[i].item == item) total += inventory[i].amount;
         return total;
     }
 }

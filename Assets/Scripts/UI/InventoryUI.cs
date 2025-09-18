@@ -7,9 +7,8 @@ public class InventoryUI : MonoBehaviour
 
     [Header("Refs")]
     public InventoryRuntime data;
-    public MonoBehaviour weaponBridge; // script con Equip(int) o EquipByItemId(string)
-    [Tooltip("Script del jugador que tenga un método Heal(int). Opcional.")]
-    public MonoBehaviour playerHealth; // opcional
+    public MonoBehaviour weaponBridge;
+    public MonoBehaviour playerHealth;
 
     [Header("UI Roots")]
     public Canvas rootCanvas;
@@ -40,6 +39,8 @@ public class InventoryUI : MonoBehaviour
         if (closeButton) closeButton.onClick.AddListener(() => ToggleInventory(false));
         ToggleInventory(false);
         HighlightHotbar(selectedHotbar);
+
+        ResolvePlayerHealth();
     }
 
     void OnDestroy()
@@ -49,21 +50,18 @@ public class InventoryUI : MonoBehaviour
 
     void Update()
     {
-        // Toggle inventario
         if (Input.GetKeyDown(KeyCode.I))
             ToggleInventory(!inventoryPanel.activeSelf);
 
-        // Hotbar 1..6
         int num = GetPressedNumberKey(1, data.hotbar.Length);
         if (num >= 0)
         {
             selectedHotbar = num;
             HighlightHotbar(selectedHotbar);
-            TryEquipSelected();
+            TryEquipOrUseSelected();
         }
     }
 
-    // -------- build/refresh --------
     void BuildGrid(GridKind kind, Transform container, int count, ref SlotUI[] cache)
     {
         foreach (Transform c in container) Destroy(c.gameObject);
@@ -87,7 +85,6 @@ public class InventoryUI : MonoBehaviour
         if (inventoryPanel) inventoryPanel.SetActive(show);
     }
 
-    // -------- DnD ops (llamadas desde SlotUI) --------
     public InventoryRuntime.Stack GetStack(GridKind kind, int index)
         => kind == GridKind.Hotbar ? data.hotbar[index] : data.inventory[index];
 
@@ -95,7 +92,7 @@ public class InventoryUI : MonoBehaviour
     {
         if (kind == GridKind.Hotbar) data.hotbar[index] = s;
         else data.inventory[index] = s;
-        data.NotifyChanged(); // <- refresca UI
+        data.NotifyChanged();
     }
 
     public void SwapOrMerge(GridKind aKind, int aIndex, GridKind bKind, int bIndex)
@@ -106,30 +103,45 @@ public class InventoryUI : MonoBehaviour
         if (!InventoryRuntime.TryMerge(ref A, ref B) && !InventoryRuntime.TryMerge(ref B, ref A))
             (A, B) = (B, A);
 
-        data.NotifyChanged(); // <- refresca UI
+        data.NotifyChanged();
     }
 
-    // -------- hotbar selection / weapon bridge --------
     void HighlightHotbar(int idx)
     {
         for (int i = 0; i < hotbarSlots.Length; i++)
             hotbarSlots[i].SetHighlight(i == idx, selectedHotbarColor);
     }
 
-    void TryEquipSelected()
+    void TryEquipOrUseSelected()
     {
+        var s = data.RefHotbar(selectedHotbar);
+        if (s.IsEmpty || s.item == null)
+        {
+            if (weaponBridge)
+            {
+                var un0 = weaponBridge.GetType().GetMethod("Unequip");
+                if (un0 != null) un0.Invoke(weaponBridge, null);
+            }
+            return;
+        }
+
+        if (s.item.kind == ItemKind.Consumable && IsHealConsumable(s))
+        {
+            UseMedkitFromHotbar(ref s);
+            data.hotbar[selectedHotbar] = s;
+            data.NotifyChanged();
+            return;
+        }
+
         if (!weaponBridge) return;
 
-        var s = data.RefHotbar(selectedHotbar);
-        // Slot vacío o no arma -> manos
-        if (s.IsEmpty || s.item == null || s.item.kind != ItemKind.Weapon)
+        if (s.item.kind != ItemKind.Weapon)
         {
             var un = weaponBridge.GetType().GetMethod("Unequip");
             if (un != null) un.Invoke(weaponBridge, null);
             return;
         }
 
-        // Si ya es la equipada -> toggle a manos
         var isEq = weaponBridge.GetType().GetMethod("IsEquippedId");
         if (isEq != null && (bool)isEq.Invoke(weaponBridge, new object[] { s.item.id }))
         {
@@ -138,27 +150,23 @@ public class InventoryUI : MonoBehaviour
             return;
         }
 
-        // Equipar por id
         var miId = weaponBridge.GetType().GetMethod("EquipByItemId");
         if (miId != null) { miId.Invoke(weaponBridge, new object[] { s.item.id }); return; }
 
-        // (fallback legacy solo si no hay EquipByItemId)
         var mi = weaponBridge.GetType().GetMethod("Equip");
         if (mi != null) mi.Invoke(weaponBridge, new object[] { selectedHotbar + 1 });
     }
-
 
     static int GetPressedNumberKey(int min1, int maxN)
     {
         for (int n = min1; n <= maxN; n++)
         {
-            KeyCode key = KeyCode.Alpha0 + n; // Alpha1..Alpha6
+            KeyCode key = KeyCode.Alpha0 + n;
             if (Input.GetKeyDown(key)) return n - 1;
         }
         return -1;
     }
 
-    // -------- Doble click para usar/equipar --------
     public void OnSlotDoubleClick(GridKind kind, int index)
     {
         var s = GetStack(kind, index);
@@ -178,19 +186,66 @@ public class InventoryUI : MonoBehaviour
                 break;
 
             case ItemKind.Consumable:
-                if (data.TryRemove(s.item, 1))
+                if (IsHealConsumable(s))
                 {
-                    if (playerHealth)
-                    {
-                        var heal = playerHealth.GetType().GetMethod("Heal");
-                        if (heal != null) heal.Invoke(playerHealth, new object[] { s.item.healAmount });
-                    }
+                    UseMedkitGeneric();
+                    if (data.TryRemove(s.item, 1)) data.NotifyChanged();
                 }
                 break;
 
             case ItemKind.Ammo:
-                // Nada (se usan con Reload)
                 break;
         }
+    }
+
+    bool IsHealConsumable(InventoryRuntime.Stack s)
+    {
+        if (s.item.kind != ItemKind.Consumable) return false;
+        if (s.item.healAmount > 0) return true;
+        if (!string.IsNullOrEmpty(s.item.id))
+        {
+            var id = s.item.id.Trim().ToLowerInvariant();
+            if (id.Contains("medkit") || id.Contains("botiquin") || id.Contains("kit")) return true;
+        }
+        return false;
+    }
+
+    void UseMedkitFromHotbar(ref InventoryRuntime.Stack s)
+    {
+        UseMedkitGeneric();
+        s.amount -= 1;
+        if (s.amount <= 0) s = InventoryRuntime.Stack.Empty;
+    }
+
+    void UseMedkitGeneric()
+    {
+        if (!ResolvePlayerHealth()) return;
+
+        var ph = playerHealth as PlayerHealth;
+        if (ph != null) { ph.Heal(ph.maxHP); return; }
+
+        var t = playerHealth.GetType();
+        var mInt = t.GetMethod("Heal", new System.Type[] { typeof(int) });
+        if (mInt != null) { mInt.Invoke(playerHealth, new object[] { int.MaxValue }); return; }
+
+        var mFloat = t.GetMethod("Heal", new System.Type[] { typeof(float) });
+        if (mFloat != null) { mFloat.Invoke(playerHealth, new object[] { float.MaxValue }); return; }
+    }
+
+    bool ResolvePlayerHealth()
+    {
+        if (playerHealth) return true;
+
+        var ph = FindFirstObjectByType<PlayerHealth>(FindObjectsInactive.Include);
+        if (ph) { playerHealth = ph; return true; }
+
+        var go = GameObject.FindGameObjectWithTag("Player");
+        if (go)
+        {
+            ph = go.GetComponent<PlayerHealth>();
+            if (ph) { playerHealth = ph; return true; }
+        }
+
+        return false;
     }
 }

@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f1d7fbb98400d3c4180d7a37d30594b8, type: 3}
+  m_Name: Zombie_Dagger_Config
+  m_EditorClassIdentifier: Assembly-CSharp::ZombieDaggerConfig
+  detectionRadius: 6
+  loseSightDistanceFactor: 1.25
+  aggroHoldSeconds: 4
+  moveSpeed: 1
+  acceleration: 18
+  deceleration: 24
+  stabDecisionRange: 1.35
+  stabCooldown: 1
+  stabWindowSeconds: 0.12
+  dashDecisionMin: 1.5
+  dashDecisionMax: 5.5
+  dashSpeed: 7
+  dashTime: 0.25
+  dashCooldown: 1.2

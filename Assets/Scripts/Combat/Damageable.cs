@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -7,7 +8,16 @@ public class Damageable : MonoBehaviour, IDamageable
 {
     [Header("Vida")]
     [SerializeField] float maxHP = 30f;
+
+    [Header("Muerte (opcional)")]
+    [Tooltip("Si está activo, el objeto se destruirá inmediatamente al morir (no se verá la animación).")]
     [SerializeField] bool destroyOnDeath = false;
+
+    [Tooltip("Si está activo, el objeto se desactiva inmediatamente al morir (no se verá la animación).")]
+    [SerializeField] bool deactivateOnDeath = false;
+
+    [Tooltip("> 0 para autodestruir después de N segundos tras morir. Déjalo en 0 si la muerte la controla otro script (AI).")]
+    [SerializeField] float autoDespawnSeconds = 0f;
 
     [Header("I-Frames (invulnerabilidad tras golpe)")]
     [SerializeField] float iFrameTime = 0f;
@@ -17,9 +27,9 @@ public class Damageable : MonoBehaviour, IDamageable
     [SerializeField] float knockbackMultiplier = 1f;
 
     [Header("Eventos")]
-    public UnityEvent<float> onHealthChanged;              // pasa vida actual
-    public UnityEvent<DamageInfo> onDamaged;               // hit (para VFX/SFX)
-    public UnityEvent onDeath;                             // muerte
+    public UnityEvent<float> onHealthChanged;     // vida actual
+    public UnityEvent<DamageInfo> onDamaged;      // hit (para VFX/SFX)
+    public UnityEvent onDeath;                    // muerte
 
     float hp;
     float iTimer;
@@ -45,12 +55,12 @@ public class Damageable : MonoBehaviour, IDamageable
     {
         if (iTimer > 0f || !IsAlive) return;
 
-        // Aplicar daño
+        // Daño
         hp -= Mathf.Max(0f, info.amount);
         onHealthChanged?.Invoke(hp);
         onDamaged?.Invoke(info);
 
-        // Knockback opcional
+        // Knockback
         if (rb2d && info.knockback > 0f)
         {
             var dir = info.dir.sqrMagnitude > 0.0001f ? info.dir.normalized : Vector2.zero;
@@ -64,11 +74,30 @@ public class Damageable : MonoBehaviour, IDamageable
         if (hp <= 0f)
         {
             hp = 0f;
-            onDeath?.Invoke();
+            onHealthChanged?.Invoke(hp);  // notificar 0 por si UI lo necesita
+            onDeath?.Invoke();            // los AIs escuchan esto y reproducen anim + despawn
 
-            if (destroyOnDeath) Destroy(gameObject);
-            else gameObject.SetActive(false);
+            // Comportamiento opcional (por si NO hay AI controlando la muerte):
+            if (autoDespawnSeconds > 0f)
+            {
+                StartCoroutine(DespawnAfter(autoDespawnSeconds));
+            }
+            else if (destroyOnDeath)
+            {
+                Destroy(gameObject);
+            }
+            else if (deactivateOnDeath)
+            {
+                gameObject.SetActive(false);
+            }
+            // Si ninguno está activo, no hacemos nada aquí: la animación se ve y el AI destruye a los 2s.
         }
+    }
+
+    IEnumerator DespawnAfter(float seconds)
+    {
+        yield return new WaitForSeconds(Mathf.Max(0f, seconds));
+        if (this) Destroy(gameObject);
     }
 
     public void Heal(float amount)
@@ -90,5 +119,6 @@ public class Damageable : MonoBehaviour, IDamageable
     {
         if (maxHP < 1f) maxHP = 1f;
         if (hp > maxHP) hp = maxHP;
+        if (autoDespawnSeconds < 0f) autoDespawnSeconds = 0f;
     }
 }

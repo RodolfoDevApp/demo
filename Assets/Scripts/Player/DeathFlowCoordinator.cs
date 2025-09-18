@@ -7,15 +7,18 @@ public class DeathFlowCoordinator : MonoBehaviour
     [Header("Refs")]
     public PlayerHealth health;
     public Animator bodyAnimator;           // Player/Visual/Body
-    public PlayerDeathLocker locker;        // tu script existente
-    public GameOverUI gameOver;             // panel
+    public PlayerDeathLocker locker;        // bloqueo de controles
+    public GameOverUI gameOver;             // panel Game Over
 
-    [Header("Detección de fin de anim")]
+    [Header("Animacion de muerte")]
     public string deathStateTag = "Death";  // tag del clip de muerte
     public float maxWaitSeconds = 3f;       // timeout de seguridad
+    public string deathBoolName = "isDeath";
 
     int _isDeathHash;
+    int _deathTagHash;
     bool _finished;
+    bool _hasDeathBool;
 
     void Reset()
     {
@@ -23,13 +26,12 @@ public class DeathFlowCoordinator : MonoBehaviour
 
         if (!bodyAnimator)
         {
-            var t = transform.root.Find("Player/Visual/Body");
+            var t = transform.root ? transform.root.Find("Player/Visual/Body") : null;
             if (t) bodyAnimator = t.GetComponent<Animator>();
         }
 
         locker ??= GetComponentInParent<PlayerDeathLocker>() ?? GetComponent<PlayerDeathLocker>();
 
-        // Buscar GameOverUI aunque esté inactivo (soporta distintas versiones de Unity)
 #if UNITY_2023_1_OR_NEWER || UNITY_2022_2_OR_NEWER
         if (!gameOver)
             gameOver = Object.FindFirstObjectByType<GameOverUI>(FindObjectsInactive.Include);
@@ -41,17 +43,55 @@ public class DeathFlowCoordinator : MonoBehaviour
 
     void Awake()
     {
-        _isDeathHash = Animator.StringToHash("isDeath");
+        _isDeathHash = Animator.StringToHash(string.IsNullOrEmpty(deathBoolName) ? "isDeath" : deathBoolName);
+        _deathTagHash = Animator.StringToHash(string.IsNullOrEmpty(deathStateTag) ? "Death" : deathStateTag);
+
+        // Detectar si el bool existe realmente en el Animator
+        if (bodyAnimator)
+        {
+            foreach (var p in bodyAnimator.parameters)
+            {
+                if (p.type == AnimatorControllerParameterType.Bool && p.nameHash == _isDeathHash)
+                {
+                    _hasDeathBool = true;
+                    break;
+                }
+            }
+        }
     }
 
     void OnEnable()
     {
-        if (health) health.OnDeath.AddListener(OnDeath);
+        if (health)
+        {
+            health.OnDeath.AddListener(OnDeath);
+            health.OnRevive.AddListener(OnReviveReset);
+        }
     }
 
     void OnDisable()
     {
-        if (health) health.OnDeath.RemoveListener(OnDeath);
+        if (health)
+        {
+            health.OnDeath.RemoveListener(OnDeath);
+            health.OnRevive.RemoveListener(OnReviveReset);
+        }
+    }
+
+    void OnReviveReset()
+    {
+        _finished = false;
+
+        if (bodyAnimator && bodyAnimator.isActiveAndEnabled)
+        {
+            if (_hasDeathBool) bodyAnimator.SetBool(_isDeathHash, false);
+
+            // Rebind para limpiar pose y devolver a defaults
+            bodyAnimator.Rebind();
+
+            // No llamamos Animator.Update(0f) para evitar el warning de objeto inactivo
+            bodyAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+        }
     }
 
     void OnDeath()
@@ -62,17 +102,14 @@ public class DeathFlowCoordinator : MonoBehaviour
 
     IEnumerator DeathRoutine()
     {
-        // IMPORTANTE: no bloqueamos aquí. Dejamos que la anim corra.
         if (bodyAnimator && bodyAnimator.isActiveAndEnabled)
         {
             bodyAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            bodyAnimator.SetBool(_isDeathHash, true);
-            bodyAnimator.Update(0f); // aplicar inmediatamente
+            if (_hasDeathBool) bodyAnimator.SetBool(_isDeathHash, true);
+            // No se llama Update(0f)
         }
 
-        // Esperar a que entre a un estado taggeado como "Death" (o timeout)
         float t = 0f;
-        int tagHash = Animator.StringToHash(deathStateTag);
         bool enteredDeath = false;
 
         while (t < maxWaitSeconds)
@@ -80,13 +117,12 @@ public class DeathFlowCoordinator : MonoBehaviour
             if (bodyAnimator && bodyAnimator.isActiveAndEnabled)
             {
                 var st = bodyAnimator.GetCurrentAnimatorStateInfo(0);
-                if (st.tagHash == tagHash) { enteredDeath = true; break; }
+                if (st.tagHash == _deathTagHash) { enteredDeath = true; break; }
             }
             t += Time.unscaledDeltaTime;
             yield return null;
         }
 
-        // Si entró, esperar a que consuma el clip (o hasta 1.5s extra)
         if (enteredDeath)
         {
             float extra = 1.5f;
@@ -101,10 +137,14 @@ public class DeathFlowCoordinator : MonoBehaviour
             }
         }
 
-        // Ahora sí: bloquear y mostrar panel
         if (locker) locker.LockNow();
         if (gameOver) gameOver.Show();
 
         _finished = true;
+    }
+
+    public void ResetForNextDeath()
+    {
+        OnReviveReset();
     }
 }

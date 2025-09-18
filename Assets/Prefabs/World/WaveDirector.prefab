@@ -1,0 +1,70 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &8525704627330768581
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6437894948227060056}
+  - component: {fileID: 8065472112018925929}
+  m_Layer: 0
+  m_Name: WaveDirector
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &6437894948227060056
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8525704627330768581}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8065472112018925929
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8525704627330768581}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44f5be4de10ef8d429e6563e73c43cb2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WaveDirector2D
+  player: {fileID: 0}
+  zombieAxePrefab: {fileID: 5561732596948572257, guid: f391f1ea05db9494f9682fe6d9bbd8f4, type: 3}
+  zombieDaggerPrefab: {fileID: 5561732596948572257, guid: ec8a41c601a09f44198d27d867ed1468, type: 3}
+  zombieBigPrefab: {fileID: 5561732596948572257, guid: 1f9b163edc4149b4f9fa7914f8709e12, type: 3}
+  minRadius: 8
+  maxRadius: 12
+  parentForSpawned: {fileID: 0}
+  spawnClearRadius: 0.25
+  spawnClearBox: {x: 0.5, y: 0.5}
+  maxTriesPerEnemy: 25
+  collidersTilemap: {fileID: 0}
+  searchFreeCellsRadius: 6
+  timeBetweenWaves: 10
+  baseCount: 5
+  addPerWave: 3
+  maxAliveCap: 50
+  hpScalePerWave: 0.2
+  dmgScalePerWave: 0.1
+  baseSpeedMultiplier: 1.2
+  speedScalePerWave: 0.05
+  forceAggroOnSpawn: 1
+  aggroHoldSecondsOverride: 999
+  drawGizmos: 1
+  gizmoColor: {r: 0.3, g: 1, b: 0.6, a: 0.35}
